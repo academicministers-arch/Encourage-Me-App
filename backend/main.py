@@ -73,6 +73,8 @@ if FRONTEND_DIST.exists():
 
 @app.get("/")
 def root():
+    if FRONTEND_DIST.exists():
+        return FileResponse(FRONTEND_DIST / "index.html")
     return {
         "app": "Encourage Me",
         "status": "running",
