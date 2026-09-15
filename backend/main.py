@@ -1,5 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -62,6 +66,11 @@ app.include_router(consultants_router.router)
 app.include_router(admin_router.router)
 
 
+FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="frontend-assets")
+
+
 @app.get("/")
 def root():
     return {
@@ -74,3 +83,14 @@ def root():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/{path:path}")
+def frontend(path: str):
+    if not FRONTEND_DIST.exists():
+        return {"detail": "Frontend build not found"}
+
+    requested_file = FRONTEND_DIST / path
+    if path and requested_file.is_file():
+        return FileResponse(requested_file)
+    return FileResponse(FRONTEND_DIST / "index.html")
