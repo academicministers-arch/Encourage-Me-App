@@ -7,7 +7,7 @@ from app.services import relevance_service
 
 
 LISTEN_NOTES_SEARCH_URL = "https://listen-api.listennotes.com/api/v2/search"
-MAX_RESULTS = 30
+MAX_RESULTS = 50
 
 
 def _entry_text(entry: dict) -> str:
