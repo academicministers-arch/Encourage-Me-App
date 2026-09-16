@@ -49,9 +49,16 @@ async def create_checkin(
     relevance_query = payload.message if payload.message and payload.message.strip() else None
 
     music = await youtube_service.search_youtube(music_topic, 6, category="music", relevance_query=relevance_query)
-    videos = await dailymotion_service.search_videos(video_topic, 6, relevance_query=relevance_query)
+    videos = await youtube_service.search_youtube(video_topic, 6, category="motivation", relevance_query=relevance_query)
     meditation = await youtube_service.search_youtube(meditation_topic, 6, category="meditation", relevance_query=relevance_query)
-    podcasts = await listennotes_service.search_podcasts(podcast_topic, 6, relevance_query=relevance_query)
+
+    # Podcasts now pull from two providers and are combined: Listen Notes
+    # for actual podcast episodes, Dailymotion for podcast-style talk/story
+    # video content. Each provider still reranks its own half by relevance
+    # to the user's message before the two halves are combined.
+    podcast_videos = await dailymotion_service.search_videos(podcast_topic, 3, relevance_query=relevance_query)
+    podcast_episodes = await listennotes_service.search_podcasts(podcast_topic, 3, relevance_query=relevance_query)
+    podcasts = podcast_episodes + podcast_videos
 
     quotes = await quotes_service.get_quotes(6)
 
@@ -140,11 +147,14 @@ async def more_recommendations(
     if category not in ("music", "motivation", "meditation", "podcasts"):
         return {"items": [], "has_more": False}
 
-    if category == "motivation":
-        items = await dailymotion_service.search_videos(topic, count, exclude_ids=exclude_ids)
-    elif category == "podcasts":
-        items = await listennotes_service.search_podcasts(topic, count, exclude_ids=exclude_ids)
+    if category == "podcasts":
+        half = max(1, count // 2)
+        podcast_videos = await dailymotion_service.search_videos(topic, half, exclude_ids=exclude_ids)
+        podcast_episodes = await listennotes_service.search_podcasts(topic, count - half, exclude_ids=exclude_ids)
+        items = podcast_episodes + podcast_videos
     else:
+        # "motivation" and "meditation" both draw from YouTube's curated
+        # categories; "music" too.
         items = await youtube_service.search_youtube(topic, count, category=category, exclude_ids=exclude_ids)
 
     # has_more is a best-effort signal: if we got a full batch back, more
