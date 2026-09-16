@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     HUGGINGFACE_API_TOKEN: str = ""
     HUGGINGFACE_EMOTION_MODEL: str = "SamLowe/roberta-base-go_emotions"
     HUGGINGFACE_JOURNAL_MODEL: str = "tiiuae/falcon-7b-instruct"
+    # Sentence-embedding model used to rerank search results by how well
+    # they actually match what the user typed, not just by provider
+    # popularity/keyword-match order. sentence-transformers/all-MiniLM-L6-v2
+    # is small, fast, and free-tier friendly on Hugging Face's Inference API.
+    HUGGINGFACE_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     # Groq provides the preferred natural-language interpretation for check-ins.
     GROQ_API_KEY: str = ""
