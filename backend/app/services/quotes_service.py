@@ -16,7 +16,7 @@ from app.services.youtube_service import QUOTES as LOCAL_QUOTES
 ZENQUOTES_RANDOM_URL = "https://zenquotes.io/api/random"
 ZENQUOTES_BULK_URL = "https://zenquotes.io/api/quotes"  # returns up to 50 quotes in one call, no key needed
 
-MAX_QUOTES = 30
+MAX_QUOTES = 50
 
 
 def _quote_id(text: str) -> str:
