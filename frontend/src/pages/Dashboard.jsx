@@ -38,7 +38,7 @@ export default function Dashboard() {
   const [loadingMore, setLoadingMore] = useState({ music: false, videos: false, meditation: false, podcasts: false, quotes: false })
   const [hasMore, setHasMore] = useState({ music: true, videos: true, meditation: true, podcasts: true, quotes: true })
 
-  const MAX_PER_CATEGORY = 30
+  const MAX_PER_CATEGORY = 50
   const CATEGORY_TO_BACKEND = { music: 'music', videos: 'motivation', meditation: 'meditation', podcasts: 'podcasts', quotes: 'quotes' }
   const ITEM_ID_FIELD = { music: 'media_id', videos: 'media_id', meditation: 'media_id', podcasts: 'media_id', quotes: 'quote_id' }
 
