@@ -41,10 +41,17 @@ async def create_checkin(
     meditation_topic = result.meditation_topic
     podcast_topic = result.podcast_topic
 
-    music = await youtube_service.search_youtube(music_topic, 6, category="music")
-    videos = await dailymotion_service.search_videos(video_topic, 6)
-    meditation = await youtube_service.search_youtube(meditation_topic, 6, category="meditation")
-    podcasts = await listennotes_service.search_podcasts(podcast_topic, 6)
+    # The user's own words are passed alongside each derived topic so every
+    # provider can rerank its results by semantic fit to what they actually
+    # wrote (see relevance_service), not just the topic keywords used to
+    # search. Falls back to unranked provider order if no message was given
+    # or embeddings aren't available.
+    relevance_query = payload.message if payload.message and payload.message.strip() else None
+
+    music = await youtube_service.search_youtube(music_topic, 6, category="music", relevance_query=relevance_query)
+    videos = await dailymotion_service.search_videos(video_topic, 6, relevance_query=relevance_query)
+    meditation = await youtube_service.search_youtube(meditation_topic, 6, category="meditation", relevance_query=relevance_query)
+    podcasts = await listennotes_service.search_podcasts(podcast_topic, 6, relevance_query=relevance_query)
 
     quotes = await quotes_service.get_quotes(6)
 
