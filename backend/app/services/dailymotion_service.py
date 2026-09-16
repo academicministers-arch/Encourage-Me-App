@@ -3,10 +3,15 @@
 import httpx
 
 from app.config import settings
+from app.services import relevance_service
 
 
 DAILYMOTION_SEARCH_URL = "https://api.dailymotion.com/videos"
 MAX_RESULTS = 30
+
+
+def _entry_text(entry: dict) -> str:
+    return f"{entry.get('title', '')}. {entry.get('description', '')}"
 
 
 def _build_entry(item: dict) -> dict | None:
@@ -30,13 +35,26 @@ def _build_entry(item: dict) -> dict | None:
     }
 
 
-async def search_videos(query: str, max_results: int = 6, exclude_ids: set[str] | None = None) -> list[dict]:
-    """Search Dailymotion's public video catalog."""
+async def search_videos(
+    query: str,
+    max_results: int = 6,
+    exclude_ids: set[str] | None = None,
+    relevance_query: str | None = None,
+) -> list[dict]:
+    """Search Dailymotion's public video catalog.
+
+    relevance_query, when given (typically the user's own check-in text),
+    is used to rerank candidates by semantic similarity to what they
+    actually wrote, instead of trusting Dailymotion's own relevance sort
+    alone. Falls back to that provider order if reranking isn't available.
+    """
     exclude_ids = exclude_ids or set()
-    limit = max(1, min(max_results * 2, MAX_RESULTS))
+    # Over-fetch so reranking has a real pool of candidates to choose from,
+    # not just whatever Dailymotion happened to put first.
+    fetch_limit = max(1, min(max_results * 3, MAX_RESULTS))
     params = {
         "search": query,
-        "limit": limit,
+        "limit": fetch_limit,
         "sort": "relevance",
         "fields": "id,title,thumbnail_360_url,thumbnail_180_url,url,description,duration,created_time,owner.screenname",
     }
@@ -51,11 +69,13 @@ async def search_videos(query: str, max_results: int = 6, exclude_ids: set[str] 
     except Exception:
         return []
 
-    entries = []
+    candidates = []
     for item in data.get("list", []):
         entry = _build_entry(item)
         if entry and entry["media_id"] not in exclude_ids:
-            entries.append(entry)
-        if len(entries) >= max_results:
-            break
-    return entries
+            candidates.append(entry)
+
+    ranked = await relevance_service.rerank_by_relevance(
+        relevance_query or query, candidates, _entry_text
+    )
+    return ranked[:max_results]
