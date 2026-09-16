@@ -15,12 +15,18 @@ Two layers of protection against showing videos that won't actually play:
    work.
 """
 
+import math
 import random
 import httpx
 from app.config import settings
+from app.services import relevance_service
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+
+
+def _entry_text(entry: dict) -> str:
+    return f"{entry.get('title', '')}. {entry.get('channel', '')}"
 
 
 def _build_entry(video_id: str, title: str, channel: str) -> dict:
@@ -114,12 +120,17 @@ def _fallback(category: str, max_results: int, exclude_ids: set = None) -> list:
     return random.sample(pool, min(max_results, len(pool)))
 
 
-async def _filter_and_rank_by_popularity(client: httpx.AsyncClient, candidates: list) -> list:
+async def _filter_and_rank_by_popularity(
+    client: httpx.AsyncClient, candidates: list, relevance_query: str | None = None
+) -> list:
     """Given search candidates, confirms each is actually embeddable/public
-    (same as before), AND fetches real view/like counts to rank them —
-    so results favor videos that are both topically relevant (from search)
-    and genuinely popular/well-loved, not just whatever ranked first by
-    YouTube's relevance algorithm.
+    (same as before), fetches real view/like counts, AND — when
+    relevance_query is given (typically the user's own check-in text) —
+    scores each candidate's title/channel against it for semantic
+    relevance. The two signals are blended so results favor videos that
+    are both topically relevant to what the user actually wrote and
+    genuinely popular/well-loved, rather than whichever video simply has
+    the most views regardless of fit.
     """
     if not candidates:
         return []
@@ -150,26 +161,51 @@ async def _filter_and_rank_by_popularity(client: httpx.AsyncClient, candidates: 
         }
 
     playable = [c for c in candidates if c["video_id"] in stats_by_id]
-    # Rank by view count (primary signal of "watched by many"), with like
-    # count as a tiebreaker (signal of "loved", not just watched).
-    playable.sort(
-        key=lambda c: (
-            stats_by_id[c["video_id"]]["view_count"],
-            stats_by_id[c["video_id"]]["like_count"],
-        ),
+    if not playable:
+        return []
+
+    # Popularity signal: log-scale view count (raw view counts span many
+    # orders of magnitude, which would otherwise swamp the relevance
+    # signal entirely), normalized to 0-1 across this candidate set.
+    log_views = [math.log10(stats_by_id[c["video_id"]]["view_count"] + 1) for c in playable]
+    max_log_views = max(log_views) or 1.0
+    popularity_norm = [lv / max_log_views for lv in log_views]
+
+    relevance = await relevance_service.relevance_scores(relevance_query, playable, _entry_text) if relevance_query else None
+
+    if relevance is not None:
+        # Relevance-to-what-the-user-wrote is weighted higher than raw
+        # popularity — a smaller, well-matched video should beat a viral
+        # but loosely-related one.
+        combined = [0.65 * rel + 0.35 * pop for rel, pop in zip(relevance, popularity_norm)]
+    else:
+        combined = popularity_norm
+
+    like_counts = [stats_by_id[c["video_id"]]["like_count"] for c in playable]
+    ranked = sorted(
+        zip(playable, combined, like_counts),
+        key=lambda t: (t[1], t[2]),
         reverse=True,
     )
-    return playable
+    return [c for c, _, _ in ranked]
 
 
-async def search_youtube(query: str, max_results: int = 6, category: str = "motivation", exclude_ids: set = None) -> list:
+async def search_youtube(
+    query: str,
+    max_results: int = 6,
+    category: str = "motivation",
+    exclude_ids: set = None,
+    relevance_query: str = None,
+) -> list:
     """Searches YouTube for the given query, then filters out any results
     that wouldn't actually play in an embedded player (private, embedding
     disabled, etc.), and any video_id already present in exclude_ids (used
     for "load more" pagination so repeat calls never show duplicates).
     category ("music", "motivation", "meditation", or "podcasts") determines which
     curated fallback list is used if the live API is unavailable or too
-    few results survive filtering.
+    few results survive filtering. relevance_query, when given (typically
+    the user's own check-in text), is blended into ranking so results
+    favor genuine fit to what the user wrote, not just view counts.
     """
     exclude_ids = exclude_ids or set()
 
@@ -204,7 +240,7 @@ async def search_youtube(query: str, max_results: int = 6, category: str = "moti
                     continue
                 candidates.append(_build_entry(vid, snippet.get("title", ""), snippet.get("channelTitle", "")))
 
-            playable = await _filter_and_rank_by_popularity(client, candidates)
+            playable = await _filter_and_rank_by_popularity(client, candidates, relevance_query)
     except Exception:
         return _fallback(category, max_results, exclude_ids)
 
