@@ -107,7 +107,7 @@ FALLBACK_BY_CATEGORY = {
 }
 
 
-MAX_PER_CATEGORY = 30
+MAX_PER_CATEGORY = 50
 
 
 def _fallback(category: str, max_results: int, exclude_ids: set = None) -> list:
