@@ -7,7 +7,7 @@ from app.services import relevance_service
 
 
 DAILYMOTION_SEARCH_URL = "https://api.dailymotion.com/videos"
-MAX_RESULTS = 30
+MAX_RESULTS = 50
 
 
 def _entry_text(entry: dict) -> str:
