@@ -42,11 +42,10 @@ async def _embed(texts: List[str]) -> Optional[List[List[float]]]:
     if not settings.HUGGINGFACE_API_TOKEN or not texts:
         return None
 
-    url = HF_API_URL.format(model=settings.HUGGINGFACE_EMBEDDING_MODEL)
-    headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_API_TOKEN}"}
-    payload = {"inputs": texts, "options": {"wait_for_model": True}}
-
     try:
+        url = HF_API_URL.format(model=settings.HUGGINGFACE_EMBEDDING_MODEL)
+        headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_API_TOKEN}"}
+        payload = {"inputs": texts, "options": {"wait_for_model": True}}
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code != 200:
