@@ -232,6 +232,7 @@ class ConsultantCreate(BaseModel):
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
     is_active: bool = True
+    password: Optional[str] = Field(default=None, min_length=6)  # set to enable chat login
 
 
 class ConsultantUpdate(BaseModel):
@@ -245,6 +246,7 @@ class ConsultantUpdate(BaseModel):
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = Field(default=None, min_length=6)  # leave blank to keep current password
 
 
 class ConsultantOut(BaseModel):
@@ -260,6 +262,49 @@ class ConsultantOut(BaseModel):
     contact_phone: Optional[str]
     is_active: bool
     created_at: datetime.datetime
+    can_chat: bool = False  # true if a password is set (login enabled), computed by the endpoint
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- Consultant Chat Login ----------
+class ConsultantLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class ConsultantToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    consultant: ConsultantOut
+
+
+# ---------- Chat ----------
+class ChatMessageOut(BaseModel):
+    id: int
+    conversation_id: int
+    sender_type: str
+    content: Optional[str]
+    attachment_url: Optional[str]
+    attachment_type: Optional[str]
+    attachment_name: Optional[str]
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationOut(BaseModel):
+    id: int
+    consultant_id: int
+    consultant_name: str
+    consultant_photo_url: Optional[str] = None
+    user_id: int
+    user_name: str
+    last_message_at: datetime.datetime
+    last_message_preview: Optional[str] = None
+    unread_count: int = 0
 
     class Config:
         from_attributes = True
