@@ -13,6 +13,12 @@ from app import models, schemas, auth
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
+def _to_consultant_out(consultant: models.Consultant) -> schemas.ConsultantOut:
+    out = schemas.ConsultantOut.model_validate(consultant)
+    out.can_chat = bool(consultant.password_hash)
+    return out
+
+
 @router.get("/consultants", response_model=list[schemas.ConsultantOut])
 def list_all_consultants(
     current_admin: models.User = Depends(auth.get_current_admin),
@@ -23,7 +29,8 @@ def list_all_consultants(
     purchase history — admins manage the directory, they don't need to
     "unlock" it.
     """
-    return db.query(models.Consultant).order_by(models.Consultant.created_at.desc()).all()
+    consultants = db.query(models.Consultant).order_by(models.Consultant.created_at.desc()).all()
+    return [_to_consultant_out(c) for c in consultants]
 
 
 @router.post("/consultants", response_model=schemas.ConsultantOut, status_code=201)
@@ -32,11 +39,15 @@ def create_consultant(
     current_admin: models.User = Depends(auth.get_current_admin),
     db: Session = Depends(get_db),
 ):
-    consultant = models.Consultant(**payload.model_dump())
+    data = payload.model_dump()
+    password = data.pop("password", None)
+    consultant = models.Consultant(**data)
+    if password:
+        consultant.password_hash = auth.hash_password(password)
     db.add(consultant)
     db.commit()
     db.refresh(consultant)
-    return consultant
+    return _to_consultant_out(consultant)
 
 
 @router.put("/consultants/{consultant_id}", response_model=schemas.ConsultantOut)
@@ -50,12 +61,16 @@ def update_consultant(
     if not consultant:
         raise HTTPException(status_code=404, detail="Consultant not found.")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    password = data.pop("password", None)
+    for field, value in data.items():
         setattr(consultant, field, value)
+    if password:
+        consultant.password_hash = auth.hash_password(password)
 
     db.commit()
     db.refresh(consultant)
-    return consultant
+    return _to_consultant_out(consultant)
 
 
 @router.delete("/consultants/{consultant_id}")
