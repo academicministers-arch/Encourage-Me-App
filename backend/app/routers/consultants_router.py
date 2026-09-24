@@ -24,6 +24,12 @@ router = APIRouter(prefix="/api/consultants", tags=["consultants"])
 PLAN_PRICING = {"basic": 50000, "premium": 100000}  # UGX
 
 
+def _to_consultant_out(consultant: models.Consultant) -> schemas.ConsultantOut:
+    out = schemas.ConsultantOut.model_validate(consultant)
+    out.can_chat = bool(consultant.password_hash)
+    return out
+
+
 def _get_access(user_id: int, db: Session) -> schemas.AccessStatusOut:
     successful = (
         db.query(models.ConsultationPurchase)
@@ -38,6 +44,18 @@ def _get_access(user_id: int, db: Session) -> schemas.AccessStatusOut:
     # Premium includes basic-tier access too, standard tiering.
     has_basic = "basic" in tiers or has_premium
     return schemas.AccessStatusOut(has_basic=has_basic, has_premium=has_premium)
+
+
+def user_has_access_to_consultant(user_id: int, consultant: "models.Consultant", db: Session) -> bool:
+    """Used by the chat endpoints to confirm a user is actually allowed to
+    message a given consultant — i.e. they've paid for that consultant's
+    tier (or a higher one). Never trust the frontend's own locked/unlocked
+    display state for this; always re-check server-side.
+    """
+    access = _get_access(user_id, db)
+    if consultant.plan_tier == "premium":
+        return access.has_premium
+    return access.has_basic
 
 
 @router.get("/access", response_model=schemas.AccessStatusOut)
@@ -71,7 +89,7 @@ def list_consultants(
             groups.append(schemas.TierGroupOut(
                 tier=tier, locked=False, price=None,
                 count=len(consultants),
-                consultants=[schemas.ConsultantOut.model_validate(c) for c in consultants],
+                consultants=[_to_consultant_out(c) for c in consultants],
             ))
         else:
             groups.append(schemas.TierGroupOut(
