@@ -26,6 +26,8 @@ from app.routers import (
     testimonials_router,
     consultants_router,
     admin_router,
+    consultant_auth_router,
+    chat_router,
 )
 
 if settings.AUTO_CREATE_SCHEMA:
@@ -64,6 +66,8 @@ app.include_router(testimonials_router.router)
 app.include_router(organizations_router.router)
 app.include_router(consultants_router.router)
 app.include_router(admin_router.router)
+app.include_router(consultant_auth_router.router)
+app.include_router(chat_router.router)
 
 
 FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
