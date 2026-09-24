@@ -27,6 +27,7 @@ class User(Base):
     testimonial_comments = relationship("TestimonialComment", back_populates="user", cascade="all, delete-orphan")
     testimonial_likes = relationship("TestimonialLike", back_populates="user", cascade="all, delete-orphan")
     consultation_purchases = relationship("ConsultationPurchase", back_populates="user", cascade="all, delete-orphan")
+    chat_conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
 
 
 class Testimonial(Base):
@@ -175,10 +176,13 @@ class Consultant(Base):
     experience_summary = Column(String, nullable=True)  # e.g. "8 years in private practice"
     plan_tier = Column(String, nullable=False, default="basic")  # "basic" | "premium"
     photo_url = Column(Text, nullable=True)
-    contact_email = Column(String, nullable=True)
+    contact_email = Column(String, nullable=True)  # also doubles as their chat login email
     contact_phone = Column(String, nullable=True)
+    password_hash = Column(String, nullable=True)  # set by admin to enable chat login
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    conversations = relationship("Conversation", back_populates="consultant", cascade="all, delete-orphan")
 
 
 class SupportOrganization(Base):
@@ -213,3 +217,36 @@ class ConsultationPurchase(Base):
     verified_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="consultation_purchases")
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    consultant_id = Column(Integer, ForeignKey("consultants.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_message_at = Column(DateTime, default=datetime.datetime.utcnow)
+    # Unread tracking: the timestamp each side last read up to. A new
+    # message "unread" for a side if it's newer than their *_read_at.
+    user_read_at = Column(DateTime, nullable=True)
+    consultant_read_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="chat_conversations")
+    consultant = relationship("Consultant", back_populates="conversations")
+    messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
+    sender_type = Column(String, nullable=False)  # "user" | "consultant"
+    content = Column(Text, nullable=True)  # nullable: a message can be attachment-only
+    attachment_url = Column(Text, nullable=True)
+    attachment_type = Column(String, nullable=True)  # "image" | "video" | "document"
+    attachment_name = Column(String, nullable=True)  # original filename, for documents
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    conversation = relationship("Conversation", back_populates="messages")
