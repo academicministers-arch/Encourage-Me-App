@@ -45,7 +45,10 @@ def get_current_user(
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: Optional[str] = payload.get("sub")
-        if user_id is None:
+        if user_id is None or not user_id.isdigit():
+            # Rejects consultant tokens too (their sub is "consultant:<id>",
+            # not a plain digit) — a consultant token must never be usable
+            # as a regular user token.
             raise credentials_exception
     except JWTError:
         raise credentials_exception
@@ -73,3 +76,37 @@ def is_bootstrap_admin_email(email: str) -> bool:
     """
     configured = [e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()]
     return email.strip().lower() in configured
+
+
+# ---------- Consultant authentication ----------
+# Consultants log in separately from regular users (they're not a "user"
+# of the wellness app — they're a professional replying to chats). Their
+# tokens are tagged with a "consultant:" prefix on the sub claim so a
+# consultant token can never be mistaken for, or reused as, a regular
+# user token, even if someone tried to hand one to the wrong endpoint.
+
+def create_consultant_access_token(consultant_id: int) -> str:
+    return create_access_token({"sub": f"consultant:{consultant_id}"})
+
+
+def get_current_consultant(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> "models.Consultant":
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate consultant credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        sub: Optional[str] = payload.get("sub")
+        if not sub or not sub.startswith("consultant:"):
+            raise credentials_exception
+        consultant_id = int(sub.split(":", 1)[1])
+    except (JWTError, ValueError):
+        raise credentials_exception
+
+    consultant = db.query(models.Consultant).filter(models.Consultant.id == consultant_id).first()
+    if consultant is None or not consultant.is_active:
+        raise credentials_exception
+    return consultant
