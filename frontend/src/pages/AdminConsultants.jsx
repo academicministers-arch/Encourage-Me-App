@@ -7,6 +7,7 @@ import { SkeletonBlock } from '../components/Skeleton.jsx'
 const EMPTY_FORM = {
   name: '', title: '', bio: '', specialties: '', experience_summary: '',
   plan_tier: 'basic', photo_url: '', contact_email: '', contact_phone: '', is_active: true,
+  password: '',
 }
 
 function ConsultantForm({ initial, onCancel, onSaved }) {
@@ -28,10 +29,16 @@ function ConsultantForm({ initial, onCancel, onSaved }) {
     }
     setSaving(true)
     try {
+      // An empty password field means "don't change it" — sending an
+      // empty string would fail the backend's minimum-length check, so
+      // we omit the field entirely in that case rather than send "".
+      const payload = { ...form }
+      if (!payload.password) delete payload.password
+
       if (isEdit) {
-        await api.put(`/api/admin/consultants/${form.id}`, form)
+        await api.put(`/api/admin/consultants/${form.id}`, payload)
       } else {
-        await api.post('/api/admin/consultants', form)
+        await api.post('/api/admin/consultants', payload)
       }
       onSaved()
     } catch (err) {
@@ -140,6 +147,23 @@ function ConsultantForm({ initial, onCancel, onSaved }) {
             className="w-full rounded-lg border border-black/10 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/40"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink/60 mb-1.5">
+          Chat login password {form.id && <span className="text-ink/35 font-normal">(leave blank to keep unchanged)</span>}
+        </label>
+        <input
+          type="password"
+          value={form.password}
+          onChange={(e) => update('password', e.target.value)}
+          placeholder="At least 6 characters"
+          className="w-full rounded-lg border border-black/10 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/40"
+        />
+        <p className="text-xs text-ink/45 mt-1.5">
+          Setting this lets the consultant log in at /consultant/login using their Contact email above,
+          and reply to users in-app. Leave blank if this consultant only wants to be reached by email/phone.
+        </p>
       </div>
 
       <label className="flex items-center gap-2 cursor-pointer">
