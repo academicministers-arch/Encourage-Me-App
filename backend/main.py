@@ -75,7 +75,7 @@ if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="frontend-assets")
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     if FRONTEND_DIST.exists():
         return FileResponse(FRONTEND_DIST / "index.html")
