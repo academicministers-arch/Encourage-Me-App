@@ -1,12 +1,14 @@
 import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import ConsultantProtectedRoute from './components/ConsultantProtectedRoute.jsx'
 import AppLayout from './components/AppLayout.jsx'
 
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import ResetPassword from './pages/ResetPassword.jsx'
+import ConsultantLogin from './pages/ConsultantLogin.jsx'
 
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
 const EmotionalJourney = lazy(() => import('./pages/EmotionalJourney.jsx'))
@@ -20,6 +22,9 @@ const Consultation = lazy(() => import('./pages/Consultation.jsx'))
 const PaymentCallback = lazy(() => import('./pages/PaymentCallback.jsx'))
 const AdminConsultants = lazy(() => import('./pages/AdminConsultants.jsx'))
 const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations.jsx'))
+const UserChatConversation = lazy(() => import('./pages/UserChatConversation.jsx'))
+const ConsultantInbox = lazy(() => import('./pages/ConsultantInbox.jsx'))
+const ConsultantChatConversation = lazy(() => import('./pages/ConsultantChatConversation.jsx'))
 
 function PageFallback() {
   return (
@@ -54,10 +59,29 @@ export default function App() {
           <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/consultation" element={<Consultation />} />
           <Route path="/consultation/callback" element={<PaymentCallback />} />
+          <Route path="/consultation/chat/:consultantId" element={<UserChatConversation />} />
           <Route path="/admin/consultants" element={<AdminConsultants />} />
           <Route path="/admin/organizations" element={<AdminOrganizations />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
+
+        <Route path="/consultant/login" element={<ConsultantLogin />} />
+        <Route
+          path="/consultant/inbox"
+          element={
+            <ConsultantProtectedRoute>
+              <ConsultantInbox />
+            </ConsultantProtectedRoute>
+          }
+        />
+        <Route
+          path="/consultant/chat/:conversationId"
+          element={
+            <ConsultantProtectedRoute>
+              <ConsultantChatConversation />
+            </ConsultantProtectedRoute>
+          }
+        />
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
