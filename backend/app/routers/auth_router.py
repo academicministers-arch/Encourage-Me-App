@@ -1,3 +1,4 @@
+import logging
 import secrets
 import datetime
 
@@ -11,6 +12,8 @@ from app.services import email_service
 from app.services.google_auth_service import verify_google_token, GoogleAuthError
 from app.config import settings
 from app.services.supabase_storage import upload_media
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -87,13 +90,35 @@ def update_avatar(
 
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         raise HTTPException(status_code=503, detail="Media storage is not configured.")
-    current_user.avatar_url = upload_media(
-        f"avatars/{current_user.id}/avatar",
-        contents,
-        avatar.content_type,
-    )
-    db.commit()
-    db.refresh(current_user)
+
+    # Step 1: upload to Supabase Storage. Any failure is logged with a full
+    # traceback and returned to the client so the real cause is visible.
+    try:
+        url = upload_media(
+            f"avatars/{current_user.id}/avatar",
+            contents,
+            avatar.content_type,
+        )
+    except Exception as exc:
+        logger.exception("Avatar upload failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Storage error: {type(exc).__name__}: {exc}",
+        )
+
+    # Step 2: save the URL. The storage path never changes, so a version
+    # query string is added to stop browsers/CDN showing the old picture.
+    try:
+        current_user.avatar_url = f"{url}?v={int(datetime.datetime.utcnow().timestamp())}"
+        db.commit()
+        db.refresh(current_user)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Saving avatar URL failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {type(exc).__name__}: {exc}",
+        )
     return current_user
 
 
